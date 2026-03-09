@@ -12,6 +12,7 @@ I would appreciate more relevant paper suggestions for the reading list, I will 
 - [ ] Dataset 1: Simulated data points upto 5 * 10^7 elements with d upto 50; L2 as proximity metric.
 - [ ] Dataste 2: CoPHiR dataset (208-d, k ~ 30 neighoburs, L1 metric).
 - [ ] Benchmark against experimental set up of Malkov et. al. [2].
+    - [ ] QPS.
     - [ ] Correctness.
     - [ ] Number of Proximit Metric Calculations as a fraction of Dataset size.
     - [ ] Scale with/against Dimensionality.
