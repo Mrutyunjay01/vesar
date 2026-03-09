@@ -6,6 +6,17 @@ I would appreciate more relevant paper suggestions for the reading list, I will 
 
 > Note that, I am still quite afresh to Rust, so kindly bear with the ugly code and strucutre. I wish to improve as I write more in time. Also, I wouldn't prefer bringing in any coding agent to this repo just yet, as it's for learning and exploration (as of now).
 
+## TODOs
+
+- [x] Approximate Nearest Neighbour (greedy + multi search, insertion) initial implementation
+- [ ] Dataset 1: Simulated data points upto 5 * 10^7 elements with d upto 50; L2 as proximity metric.
+- [ ] Dataste 2: CoPHiR dataset (208-d, k ~ 30 neighoburs, L1 metric).
+- [ ] Benchmark against experimental set up of Malkov et. al. [2].
+    - [ ] Correctness.
+    - [ ] Number of Proximit Metric Calculations as a fraction of Dataset size.
+    - [ ] Scale with/against Dimensionality.
+
 ## References
 
 1. [Approximate Nearest Neighbor Search Small World Approach](https://www.iiis.org/CDs2011/CD2011IDI/ICTA_2011/PapersPdf/CT175ON.pdf)
+1. [Approximate Nearest Neighbor Algorithm Based on Navigable Small World Graphs](https://www.sciencedirect.com/science/article/abs/pii/S0306437913001300)
