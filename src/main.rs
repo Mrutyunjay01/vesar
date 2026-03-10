@@ -1,7 +1,6 @@
-use rand::rng;
-use rand::RngExt;
 use vesar::core::ann_index::ANNIndex;
 use vesar::metrics::l2::l2;
+use vesar::datasets::synthetic_data;
 
 fn main() {
     let mut db = ANNIndex::new();
@@ -10,29 +9,21 @@ fn main() {
     let m = 5;
     let dim = 2;
     let n_points = 1000000;
-
-    let mut rng = rng();
+    let n_tests: usize = 5;
 
     println!("---- Inserting random points ----");
 
-    for _ in 0..n_points {
-        let point: Vec<f32> = (0..dim)
-            .map(|_| rng.random_range(0.0..100.0))
-            .collect();
-
+    let points: Vec<Vec<f32>> = synthetic_data::generate_data(n_points, dim);
+    for point in points {
         db.insert(&point, k, m);
     }
 
     println!("Inserted {} nodes", db.nodes.len());
 
     println!("---- Running search tests ----");
+    let queries: Vec<Vec<f32>> = synthetic_data::generate_query(n_tests, dim);
 
-    for test_id in 0..10 {
-
-        let query: Vec<f32> = (0..dim)
-            .map(|_| rng.random_range(0.0..100.0))
-            .collect();
-
+    for (test_id, query) in queries.iter().enumerate() {
         println!("\nTest {}: Query {:?}", test_id + 1, query);
 
         let greedy_result = db.greedy_search(&query, 0);

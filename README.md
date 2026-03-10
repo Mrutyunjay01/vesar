@@ -6,7 +6,7 @@ I would appreciate more relevant paper suggestions for the reading list, I will 
 
 > Note that, I am still quite afresh to Rust, so kindly bear with the ugly code and strucutre. I wish to improve as I write more in time. Also, I wouldn't prefer bringing in any coding agent to this repo just yet, as it's for learning and exploration (as of now).
 
-## TODOs
+## TODOs (High-level)
 
 - [x] Approximate Nearest Neighbour (greedy + multi search, insertion) initial implementation
 - [ ] Dataset 1: Simulated data points upto 5 * 10^7 elements with d upto 50; L2 as proximity metric.

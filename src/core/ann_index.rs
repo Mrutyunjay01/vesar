@@ -44,6 +44,7 @@ pub struct Node {
 pub struct ANNIndex {
     pub nodes: Vec<Node>, // adjacency list
 }
+
 impl ANNIndex {
     pub fn new() -> Self {
         Self {
