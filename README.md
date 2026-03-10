@@ -14,7 +14,7 @@ I would appreciate more relevant paper suggestions for the reading list, I will 
 - [ ] Benchmark against experimental set up of Malkov et. al. [2].
     - [ ] QPS.
     - [ ] Correctness.
-    - [ ] Number of Proximit Metric Calculations as a fraction of Dataset size.
+    - [ ] Number of Proximity Metric Calculations as a fraction of Dataset size.
     - [ ] Scale with/against Dimensionality.
 
 ## References

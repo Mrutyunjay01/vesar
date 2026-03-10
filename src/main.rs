@@ -1,5 +1,4 @@
 use vesar::core::ann_index::ANNIndex;
-use vesar::metrics::l2::l2;
 use vesar::datasets::synthetic_data;
 
 fn main() {
@@ -33,26 +32,16 @@ fn main() {
         println!("Multi-search result node: {}", multi_result);
 
         // brute force nearest neighbour
-        let mut best_node = 0;
-        let mut best_dist = l2(&query, &db.nodes[0].value);
+        let bruteforce_result = db.bruteforce_nn(query);
+        println!("Brute force nearest node: {}", bruteforce_result);
 
-        for node in &db.nodes {
-            let dist = l2(&query, &node.value);
-            if dist < best_dist {
-                best_dist = dist;
-                best_node = node.id;
-            }
-        }
-
-        println!("Brute force nearest node: {}", best_node);
-
-        if best_node == greedy_result {
+        if bruteforce_result == greedy_result {
             println!("Greedy search: EXACT");
         } else {
             println!("Greedy search: APPROX");
         }
 
-        if best_node == multi_result {
+        if bruteforce_result == multi_result {
             println!("Multi-search: EXACT");
         } else {
             println!("Multi-search: APPROX");

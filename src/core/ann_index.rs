@@ -163,6 +163,21 @@ impl ANNIndex {
         return closest_neighbour;
     }
 
+    pub fn bruteforce_nn(&self, query: &[f32]) -> NodeId {
+        let mut best_node = 0;
+        let mut best_dist = l2(&query, &self.nodes[best_node].value);
+
+        for node in &self.nodes {
+            let dist = l2(&query, &node.value);
+            if dist < best_dist {
+                best_dist = dist;
+                best_node = node.id;
+            }
+        }
+
+        return best_node;
+    }
+
     fn _multi_search(&self, query: &[f32], m: usize) -> Vec<NodeId> {
         /*
         * instead of one entry vertext, start m searches
