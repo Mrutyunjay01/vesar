@@ -1,0 +1,16 @@
+[package]
+name = "vesar"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "vesar"
+path = "main.rs"
+
+[lib]
+name = "vesar"
+path = "lib.rs"
+
+[dependencies]
+# external
+rand = "0.10.0"
