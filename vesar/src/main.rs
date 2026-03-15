@@ -8,7 +8,7 @@ fn main() {
     let m = 5;
     let dim = 2;
     let n_points = 1000000;
-    let n_tests: usize = 5;
+    let n_tests: u64 = 5;
 
     println!("---- Inserting random points ----");
 

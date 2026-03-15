@@ -75,7 +75,7 @@ impl ANNIndex {
 
         let local_neighbours = self._multi_search(&candidate, m);
         // set of entire neighbourhood derived from local neighbours, no duplicates
-        let mut neighbourhood = HashSet::new(); 
+        let mut neighbourhood = HashSet::new();
         for &neighbour in &local_neighbours {
             // udpate neighbourhood set with neighbours of the neighbour
             neighbourhood.insert(neighbour);

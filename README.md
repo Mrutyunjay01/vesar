@@ -9,10 +9,11 @@ I would appreciate more relevant paper suggestions for the reading list, I will 
 ## TODOs (High-level)
 
 - [x] Approximate Nearest Neighbour (greedy + multi search, insertion) initial implementation
-- [ ] Dataset 1: Simulated data points upto 5 * 10^7 elements with d upto 50; L2 as proximity metric.
+- [x] Dataset 1: Simulated data points upto 1M elements with d upto 16; L2 as proximity metric.
 - [ ] Dataste 2: CoPHiR dataset (208-d, k ~ 30 neighoburs, L1 metric).
 - [ ] Benchmark against experimental set up of Malkov et. al. [2].
-    - [ ] QPS.
+    - [x] Insertion latency.
+    - [x] QPS.
     - [ ] Correctness.
     - [ ] Number of Proximity Metric Calculations as a fraction of Dataset size.
     - [ ] Scale with/against Dimensionality.
