@@ -6,15 +6,13 @@ use vesar::datasets::synthetic_data::{generate_data, generate_query};
 fn bench_query(c: &mut Criterion) {
     let mut group = c.benchmark_group("query_bench");
 
-    let n_set = [1_000_000]; // start with 1M insertions, will benchmark for scale later
-    let dim_set = [16];
-    let k_set = [1, 5];
-    let m_set = [5];
+    let n_set = [10_000, 100_000, 1_000_000]; // start with 1M insertions, will benchmark for scale later
+    let dim_set = [2, 8, 16, 32];
+    let k_set = [1, 5, 10];
+    let m_set = [1, 3, 5];
 
     for n in n_set {
-        
         for dim in dim_set {
-
             let points = generate_data(n, dim);
             let quries = generate_query((n as f64).sqrt() as u64, dim);
 
