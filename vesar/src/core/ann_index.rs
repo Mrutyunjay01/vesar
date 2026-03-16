@@ -178,6 +178,28 @@ impl ANNIndex {
         return best_node;
     }
 
+    pub fn bruteforce_top_k(&self, query: &[f32], k: usize) -> Vec<NodeId> {
+
+        let mut max_heap_k: BinaryHeap<HeapItem> = BinaryHeap::new();
+        for node in &self.nodes {
+            let proximity = l2(&query, &node.value);
+
+            if max_heap_k.len() < k {
+                max_heap_k.push(HeapItem { node: (node.id), dist: (proximity) });
+            } else if let Some(top) = max_heap_k.peek() { // if heap is full, remove the farthest, insert new closer
+                if proximity < top.dist {
+                    max_heap_k.pop();
+                    max_heap_k.push(HeapItem { node: (node.id), dist: (proximity) });
+                }
+            }
+        }
+        
+        let neighbours: Vec<NodeId> =
+            max_heap_k.iter().map(|item| item.node).collect();
+
+        return neighbours;
+    }
+
     fn _multi_search(&self, query: &[f32], m: usize) -> Vec<NodeId> {
         /*
         * instead of one entry vertext, start m searches

@@ -25,3 +25,7 @@ harness = false
 [[bench]]
 name = "qps"
 harness = false
+
+[[bench]]
+name = "recall"
+harness = false

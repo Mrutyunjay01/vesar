@@ -9,7 +9,7 @@ I would appreciate more relevant paper suggestions for the reading list, I will 
 ## Benchmarks
 
 ```bash
-cargo bench --bench insert --bench qps n_1000000_dim_16_k_5_m_5 -- --sample-size 10 --measurement-time 250
+cargo bench --bench insert --bench qps n_1000000_dim_16_gd_5_m_5 -- --sample-size 10 --measurement-time 250
 ```
 
 ## TODOs (High-level)
@@ -20,7 +20,7 @@ cargo bench --bench insert --bench qps n_1000000_dim_16_k_5_m_5 -- --sample-size
 - [ ] Benchmark against experimental set up of Malkov et. al. [2].
     - [x] Insertion latency.
     - [x] QPS.
-    - [ ] Correctness.
+    - [x] Correctness.
     - [ ] Number of Proximity Metric Calculations as a fraction of Dataset size.
     - [ ] Scale with/against Dimensionality.
 
