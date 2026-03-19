@@ -2,6 +2,7 @@ use crate::metrics::l2::l2;
 use rand::rng;
 use rand::RngExt;
 use std::cmp::Ordering;
+use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::collections::BinaryHeap;
 
@@ -113,6 +114,27 @@ impl ANNIndex {
         }
     }
 
+    pub fn k_insert(&mut self, candidate: &[f32], k: usize, m: usize) {
+        let new_node_id = self.nodes.len(); // this shouldn't be incremental counter
+        let new_node = Node {
+            id: new_node_id,
+            value: candidate.to_vec(),
+            neighbours: Vec::new()
+        };
+
+        self.nodes.push(new_node);
+        if self.nodes.len() == 1 {
+            return;
+        }
+
+        // find k nearest neighbours first
+        let k_neighbours = self.k_multi_search(&candidate, m, k);
+        for neighbour in k_neighbours {
+            self.nodes[new_node_id].neighbours.push(neighbour);
+            self.nodes[neighbour].neighbours.push(new_node_id);
+        }
+    }
+
     pub fn greedy_search(&self, query: &[f32], entry_point: NodeId) -> NodeId {
         /*
         * start from the entry point, calculate the distance
@@ -161,6 +183,74 @@ impl ANNIndex {
         }
 
         return closest_neighbour;
+    }
+
+    pub fn k_multi_search(&self, query: &[f32], m: usize, k: usize) -> Vec<NodeId> {
+        
+        // results for top-k, candidates - can be just a slice/vec, visitedSet - hash-set, tempRes - again heap
+        let mut heap_k: BinaryHeap<HeapItem> = BinaryHeap::new();
+        let mut visited_set: HashSet<NodeId> = HashSet::new();
+        let mut candidates: BinaryHeap<Reverse<HeapItem>> = BinaryHeap::new();
+
+        let mut rng = rng();
+
+        for _ in 0..m {
+            // get random entry point
+            let entry_vertex = rng.random_range(0..self.nodes.len());
+            if !visited_set.insert(entry_vertex) {
+                continue;
+            }
+
+            let entry_proximity = l2(&query, &self.nodes[entry_vertex].value);
+            candidates.push(Reverse(HeapItem { node: entry_vertex, dist: entry_proximity}));
+
+            let mut temp_results: BinaryHeap<HeapItem> = BinaryHeap::new();
+            // find the closest candidate from candidates, i.e. top of the min heap
+            while let Some(Reverse(current_candidate)) = candidates.pop() {
+                let heap_item = HeapItem { node: current_candidate.node, dist: current_candidate.dist };
+
+                // find whether the closest candidate is closer than the kth element on heap
+                if heap_k.len() < k {
+                    heap_k.push(heap_item);
+                } else if let Some(top) = heap_k.peek() {
+                    if current_candidate.dist < top.dist {
+                        heap_k.pop();
+                        heap_k.push(heap_item);
+                    } else {
+                        break;
+                    }
+                }
+
+                // if the closest candidate is accepted into top_k,
+                // insert its neighbours into candidates if not visited already
+                for &neighbour in &self.nodes[current_candidate.node].neighbours {
+                    if visited_set.insert(neighbour) {
+                        let neighbour_proximity = l2(&query, &self.nodes[neighbour].value);
+
+                        // add to candidates
+                        candidates.push(Reverse(HeapItem { node: neighbour, dist: neighbour_proximity }));
+
+                        // populate temp results here?
+                        temp_results.push(HeapItem { node: neighbour, dist: neighbour_proximity });
+                    }
+                }
+            }
+
+            // dump temp_results into heap_k
+            for item in temp_results {
+                if heap_k.len() < k {
+                    heap_k.push(item);
+                } else if let Some(top) = heap_k.peek() {
+                    if item.dist < top.dist {
+                        heap_k.pop();
+                        heap_k.push(item);
+                    }
+                }
+            }
+        }
+
+        let results = heap_k.iter().map(|item| item.node).collect();
+        return results;
     }
 
     pub fn bruteforce_nn(&self, query: &[f32]) -> NodeId {

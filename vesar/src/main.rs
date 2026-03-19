@@ -7,14 +7,14 @@ fn main() {
     let k = 5;
     let m = 5;
     let dim = 2;
-    let n_points = 1000000;
-    let n_tests: u64 = 5;
+    let n_points = 5;
+    let n_tests: u64 = 2;
 
     println!("---- Inserting random points ----");
 
     let points: Vec<Vec<f32>> = synthetic_data::generate_data(n_points, dim);
     for point in points {
-        db.insert(&point, k, m);
+        db.k_insert(&point, k, m);
     }
 
     println!("Inserted {} nodes", db.nodes.len());
@@ -27,9 +27,13 @@ fn main() {
 
         let greedy_result = db.greedy_search(&query, 0);
         let multi_result = db.multi_search(&query, m);
+        let k_results = db.k_multi_search(&query, m, k);
+
+        let a: Vec<String> = k_results.iter().map(|&ele| ele.to_string()).collect();
 
         println!("Greedy result node: {}", greedy_result);
         println!("Multi-search result node: {}", multi_result);
+        println!("kNN Search Result Nodes: {}", a.join(","));
 
         // brute force nearest neighbour
         let bruteforce_result = db.bruteforce_nn(query);
