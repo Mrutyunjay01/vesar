@@ -29,8 +29,6 @@ fn bench_insert_ann(c: &mut Criterion) {
             group.throughput(criterion::Throughput::Elements(points.len() as u64));
             for &gd in &gd_set {
                 for &m in &m_set {
-                    println!("insert bench (ann) set up: N={}, dim={}, graph_degree={}, multi_search={}", n, dim, gd, m);
-                    
                     group.bench_function(format!("insert_n_{}_dim_{}_gd_{}_m_{}", n, dim, gd, m),
                     |b| {
                         b.iter_batched(|| ANNIndex::new(),
@@ -63,15 +61,12 @@ fn bench_insert_knn(c: &mut Criterion) {
             group.throughput(criterion::Throughput::Elements(points.len() as u64));
             for &gd in &gd_set {
                 for &m in &m_set {
-
-                    println!("insert bench (knn) set up: N={}, dim={}, graph_degree={}, multi_search={}", n, dim, gd, m);
-
                     group.bench_function(format!("insert_n_{}_dim_{}_gd_{}_m_{}", n, dim, gd, m),
                     |b| {
                         b.iter_batched(|| ANNIndex::new(),
                     |mut db| {
                         for point in &points {
-                            db.k_insert(black_box(point), gd, m);
+                            db.k_insert(black_box(point), (3 * dim + 1) as usize, m);
                         }}, 
                         BatchSize::LargeInput);
                     });

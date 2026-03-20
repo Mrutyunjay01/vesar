@@ -43,9 +43,6 @@ fn recall_bench_ann() {
 
             for &gd in &gd_set {
                 for &m in &m_set {
-
-                    println!("insert bench (ann) set up: N={}, dim={}, graph_degree={}, multi_search={}", n, dim, gd, m);
-
                     let mut db = ANNIndex::new();
                     for point in &points { db.insert(point, gd as usize, m as usize); }
 
@@ -107,10 +104,8 @@ fn recall_bench_knn() {
 
             for &gd in &gd_set {
                 for &m in &m_set {
-                    println!("insert bench (knn) set up: N={}, dim={}, graph_degree={}, multi_search={}", n, dim, gd, m);
-
                     let mut db = ANNIndex::new();
-                    for point in &points { db.k_insert(point, gd as usize, m as usize); }
+                    for point in &points { db.k_insert(point, (3 * dim + 1) as usize, m as usize); }
 
                     for &k in &k_set {
                         let mut gt_top_k = Vec::with_capacity(queries.len());

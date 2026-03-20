@@ -31,9 +31,6 @@ fn bench_query_ann(c: &mut Criterion) {
             group.throughput(criterion::Throughput::Elements(quries.len() as u64));
             for &gd in &gd_set {
                 for &m in &m_set {
-
-                    println!("query bench (ann) set up: N={}, dim={}, graph_degree={}, multi_search={}", n, dim, gd, m);
-                    
                     let mut db = ANNIndex::new();
                     for point in &points {
                         db.insert(point, gd, m);
@@ -69,11 +66,9 @@ fn bench_query_knn(c: &mut Criterion) {
             group.throughput(criterion::Throughput::Elements(quries.len() as u64));
             for &gd in &gd_set {
                 for &m in &m_set {
-                    println!("query bench (knn) set up: N={}, dim={}, graph_degree={}, multi_search={}", n, dim, gd, m);
-
                     let mut db = ANNIndex::new();
                     for point in &points {
-                        db.k_insert(point, gd, m);
+                        db.k_insert(point, (3 * dim + 1) as usize, m);
                     }
 
                     group.bench_function(format!("query_n_{}_dim_{}_gd_{}_m_{}", n, dim, gd, m), 
