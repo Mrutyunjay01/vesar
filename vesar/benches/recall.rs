@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 use std::hint::black_box;
+use vesar::core::hnsw_index::HNSWIndex;
 use vesar::{core::ann_index::{ANNIndex}, datasets::synthetic_data::{generate_data, generate_query}};
 
 fn parse_env_list<T>(var_name: &str, default_val: &str) -> Vec<T> 
@@ -151,7 +152,69 @@ fn recall_bench_knn() {
 }
 
 
+fn recall_bench_hnsw() {
+    let n_set: Vec<u64> = parse_env_list("N", "1000000");
+    let dim_set: Vec<u64> = parse_env_list("DIM", "16");
+    let m_set: Vec<u64> = parse_env_list("GD", "10");
+    let ef_set: Vec<u64> = parse_env_list("M", "5");
+    let k_set: Vec<u64> = parse_env_list("K", "10");
+    let iters = std::env::var("ITERS").unwrap_or(String::from("10")).parse::<usize>().unwrap();
+
+    for &n in &n_set {
+        for &dim in &dim_set {
+            let points = generate_data(n, dim);
+            let queries = generate_query((n as f64).sqrt() as u64, dim);
+
+            for &m in &m_set {
+                for &ef in &ef_set {
+                    let mut db = HNSWIndex::new(m as i32);
+                    for point in &points { db.insert(point, ef as usize); }
+
+                    for &k in &k_set {
+                        let mut gt_top_k = Vec::with_capacity(queries.len());
+                        for query in &queries {
+                            gt_top_k.push(db.bruteforce_top_k(query, k as usize));
+                        }
+
+                        // warm up
+                        for query in queries.iter().take(100) {
+                            black_box(db.search(query, k as usize, ef as usize));
+                        }
+
+                        let mut total_duration_knn = Duration::ZERO;
+                        let mut total_recall_knn = 0.0;
+
+                        for _ in 0..iters {
+                            let mut iter_recall_knn = 0.0;
+                            let start_knn = Instant::now();
+                            for (query_idx, query) in queries.iter().enumerate() {
+                                let results = black_box(db.search(query, k as usize, ef as usize));
+                                iter_recall_knn += calculate_recall_k(&gt_top_k[query_idx], &results);
+                            }
+                            total_duration_knn += start_knn.elapsed();
+                            total_recall_knn += iter_recall_knn as f64 / queries.len() as f64;
+                        }
+
+                        let bench_name = format!("n_{}_dim_{}_gd_{}_m_{}_k_{}", n, dim, m, ef, k);
+                        let avg_recall_knn = total_recall_knn / iters as f64;
+                        
+                        let total_queries = (queries.len() * iters) as f64;
+                        let qps_knn = total_queries / total_duration_knn.as_secs_f64();
+                        let avg_time_ms_knn = (total_duration_knn.as_secs_f64() * 1000.0) / total_queries;
+
+                        println!(
+                            "{:<35} | RECALL_KNN: {:.4} | QPS_KNN: {:>10.0} | AVG LATENCY (KNN): {:.4}ms", 
+                            bench_name, avg_recall_knn, qps_knn, avg_time_ms_knn
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn main() {
-    recall_bench_ann();
-    recall_bench_knn();
+    // recall_bench_ann();
+    // recall_bench_knn();
+    recall_bench_hnsw();
 }

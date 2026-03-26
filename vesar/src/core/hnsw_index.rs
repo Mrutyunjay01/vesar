@@ -88,6 +88,7 @@ impl HNSWIndex {
             // find single entry point per layer, which is the closest candidate to the incoming node
             let closest_in_current_layer = self.search_layer(&incoming_node.value, &entry_point, current_layer, 1);
             // println!("found {} closest neighoburs in layer: {}", closest_in_current_layer.len(), current_layer);
+            assert!(closest_in_current_layer.len() == 1);
             entry_point = closest_in_current_layer; // assuming that the results are sorted, nearest element to incoming_node
         }
 
@@ -102,7 +103,7 @@ impl HNSWIndex {
             let neighbours = self.select_neighbours_naive(candidate, &closest_candidates, self.m as usize);
             // println!("found {} neighbourhood to connect to", neighbours.len());
             // bidirectional connection w/ neighbours
-            for neighbour in neighbours {
+            for &neighbour in &neighbours {
                 // connect candidate
                 // println!("connecting {} with neighbour {}", incoming_node.id, neighbour);
                 self.nodes[incoming_node.id].neighbours.entry(current_layer).or_insert_with(Vec::new).push(neighbour);
@@ -114,6 +115,23 @@ impl HNSWIndex {
             }
 
             // todo: implement shrinking when grows beyond allowed connections
+            for &neighbour in &neighbours {
+                let allowed_connections_for_neighbour = if current_layer != 0 { self.m } else { self.m0 };
+                let neighbourhood = &self.nodes[neighbour].neighbours[&current_layer];
+
+                if neighbourhood.len() > (allowed_connections_for_neighbour as usize) {
+                    // if neighbourhood is larger the allowed connections in that layer, shrink.
+                    let shrinked_neighbours = self.select_neighbours_naive(&self.nodes[neighbour].value, &neighbourhood, self.m as usize);
+                    // set as new neighbourhood
+                    self.nodes[neighbour].neighbours.insert(current_layer, shrinked_neighbours);
+                }
+
+                assert!(
+                    self.nodes[neighbour].neighbours[&current_layer].len() <= allowed_connections_for_neighbour as usize, 
+                    "invalid number of neighbours for neighbour {}, allowed {}, current {}, layer: {}",
+                     neighbour, allowed_connections_for_neighbour, self.nodes[neighbour].neighbours[&current_layer].len(), current_layer);
+            }
+
             // update entry point with closest candidates
             // println!("updating entry point with {} closest candidates for layer {}", closest_candidates.len(), current_layer);
             entry_point = closest_candidates;
@@ -257,5 +275,27 @@ impl HNSWIndex {
             }
         }
         return results.iter().map(|Reverse(ele)| ele.node).collect();
+    }
+
+    pub fn bruteforce_top_k(&self, query: &[f32], k: usize) -> Vec<NodeId> {
+
+        let mut max_heap_k: BinaryHeap<HeapItem> = BinaryHeap::new();
+        for node in &self.nodes {
+            let proximity = l2(&query, &node.value);
+
+            if max_heap_k.len() < k {
+                max_heap_k.push(HeapItem { node: (node.id), dist: (proximity) });
+            } else if let Some(top) = max_heap_k.peek() { // if heap is full, remove the farthest, insert new closer
+                if proximity < top.dist {
+                    max_heap_k.pop();
+                    max_heap_k.push(HeapItem { node: (node.id), dist: (proximity) });
+                }
+            }
+        }
+        
+        let neighbours: Vec<NodeId> =
+            max_heap_k.iter().map(|item| item.node).collect();
+
+        return neighbours;
     }
 }
