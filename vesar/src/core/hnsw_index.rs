@@ -231,9 +231,31 @@ impl HNSWIndex {
         query: &[f32], 
         k: usize, 
         exploration_factor: usize) -> Vec<NodeId> {
-        // todo: KNN on top of search layer
-        let res: Vec<NodeId> = Vec::new();
+        // find an entry point till the 1st layer
+        let mut entry_points = Vec::new();
+        entry_points.push(self.entry_point);
+        for current_layer in (1..=self.top_layer).rev(){
+            let closest_candidates = self.search_layer(query, &entry_points, current_layer as usize, 1);
+            assert!(closest_candidates.len() != 0);
+            // ideally get the nearest from closest_candidates to query, but ok.
+            entry_points = closest_candidates;
+        }
 
-        return res;
+        // use that entry point to search in the 0th layer
+        let nearest_neighbours = self.search_layer(query, &entry_points, 0, exploration_factor);
+        // sort and return top k
+        let mut results: BinaryHeap<Reverse<HeapItem>> = BinaryHeap::new();
+        for neighbour in nearest_neighbours {
+            let proximity = l2(query, &self.nodes[neighbour].value);
+            if results.len() < k {
+                results.push(Reverse(HeapItem{node: neighbour, dist: proximity}));
+            } else if let Some(Reverse(closest_neighbour)) = results.peek() {
+                if proximity < closest_neighbour.dist {
+                    results.pop();
+                    results.push(Reverse(HeapItem { node: neighbour, dist: proximity }));
+                }
+            }
+        }
+        return results.iter().map(|Reverse(ele)| ele.node).collect();
     }
 }
