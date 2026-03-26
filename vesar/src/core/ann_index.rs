@@ -1,40 +1,10 @@
 use crate::metrics::l2::l2;
 use rand::rng;
 use rand::RngExt;
-use std::cmp::Ordering;
 use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::collections::BinaryHeap;
-
-pub type NodeId = usize;
-
-#[derive(Debug)]
-struct HeapItem {
-    node: NodeId,
-    dist: f32,
-}
-
-impl Eq for HeapItem {}
-
-impl PartialEq for HeapItem {
-    fn eq(&self, other: &Self) -> bool {
-        self.dist == other.dist
-    }
-}
-
-impl Ord for HeapItem {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.dist
-            .partial_cmp(&other.dist)
-            .unwrap()
-    }
-}
-
-impl PartialOrd for HeapItem {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+use crate::container::heap::{HeapItem, NodeId};
 
 pub struct Node {
     pub id: NodeId,
