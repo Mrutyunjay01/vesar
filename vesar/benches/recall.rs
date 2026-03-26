@@ -168,7 +168,7 @@ fn recall_bench_hnsw() {
             for &m in &m_set {
                 for &ef in &ef_set {
                     let mut db = HNSWIndex::new(m as i32);
-                    for point in &points { db.insert(point, ef as usize); }
+                    for point in &points { db.insert(point, (ef*ef) as usize); }
 
                     for &k in &k_set {
                         let mut gt_top_k = Vec::with_capacity(queries.len());

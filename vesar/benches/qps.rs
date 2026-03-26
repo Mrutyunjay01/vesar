@@ -104,7 +104,7 @@ fn bench_query_hnsw(c: &mut Criterion) {
                 for &ef in &ef_set {
                     let mut db = HNSWIndex::new(m as i32);
                     for point in &points {
-                        db.insert(point, ef);
+                        db.insert(point, ef * ef);
                     }
 
                     group.bench_function(format!("query_n_{}_dim_{}_gd_{}_m_{}", n, dim, m, ef), 

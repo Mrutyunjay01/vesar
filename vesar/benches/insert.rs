@@ -98,7 +98,7 @@ fn bench_insert_hnsw(c: &mut Criterion) {
                         b.iter_batched(|| HNSWIndex::new(gd),
                     |mut db| {
                         for point in &points {
-                            db.insert(black_box(point), m);
+                            db.insert(black_box(point), m*m);
                         }}, 
                         BatchSize::LargeInput);
                     });
