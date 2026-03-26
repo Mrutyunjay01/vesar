@@ -62,12 +62,12 @@ impl HNSWIndex {
             neighbours: HashMap::new()
         };
 
-        // insert node
-        self.nodes.push(Node { id: incoming_node.id, value: incoming_node.value.to_vec(), neighbours: incoming_node.neighbours });
-        
         // if the db is empty
         if self.is_empty() {
             // println!("no node in db, adding first node ...");
+            // insert node
+            self.nodes.push(Node { id: incoming_node.id, value: incoming_node.value.to_vec(), neighbours: incoming_node.neighbours });
+        
             // update metadata
             self.entry_point = incoming_node.id;
             self.top_layer = 0;
@@ -75,32 +75,42 @@ impl HNSWIndex {
             return
         }
 
+        // insert node
+        self.nodes.push(Node { id: incoming_node.id, value: incoming_node.value.to_vec(), neighbours: incoming_node.neighbours });
+        
         // generate layer for the incoming node
         let calculated_layer = self.sample_layer(self.ml);
         // println!("calculated layer: {}", calculated_layer);
 
-        let mut entry_point = Vec::new();
-        entry_point.push(self.entry_point);
+        let mut entry_points = Vec::new();
+        entry_points.push(self.entry_point);
 
         // otherwise, descend from L to calculated_layer entry point
-        for current_layer in (calculated_layer+1..=self.top_layer as usize).rev() {
+        for current_layer in (calculated_layer..=self.top_layer as usize).rev() {
             // println!("finding closest in layer: {}", current_layer);
             // find single entry point per layer, which is the closest candidate to the incoming node
-            let closest_in_current_layer = self.search_layer(&incoming_node.value, &entry_point, current_layer, 1);
+            let closest_in_current_layer = self.search_layer(&incoming_node.value, &entry_points, current_layer, 1);
             // println!("found {} closest neighoburs in layer: {}", closest_in_current_layer.len(), current_layer);
             assert!(closest_in_current_layer.len() == 1);
-            entry_point = closest_in_current_layer; // assuming that the results are sorted, nearest element to incoming_node
+            entry_points = closest_in_current_layer; // assuming that the results are sorted, nearest element to incoming_node
         }
 
         // now that we have an entry point to go into the calculated_layer,
         // find closest neighbours -> connect -> shrink if grown beyond allowed
         // println!("descending from layers using found {} entry points", entry_point.len());
-        for current_layer in (0..=cmp::min(calculated_layer, self.top_layer as usize)).rev() {
+        for current_layer in (0..cmp::min(calculated_layer, self.top_layer as usize)).rev() {
             // println!("finding closest candidate in layer {} using {} entry points with ef: {}", current_layer, entry_point.len(), exploration_factor);
-            let closest_candidates = self.search_layer(candidate, &entry_point, current_layer, exploration_factor);
+            let closest_candidates = self.search_layer(candidate, &entry_points, current_layer, exploration_factor);
+            assert!(
+                closest_candidates.len() <= exploration_factor,
+                "closest candidates {} found aren't equal to exploration factor {}",
+                closest_candidates.len(), exploration_factor
+            );
+
             // println!("found {} closest neighoburs in layer: {}", closest_candidates.len(), current_layer);
             // find m closest neighbours
-            let neighbours = self.select_neighbours_naive(candidate, &closest_candidates, self.m as usize);
+            // let neighbours = self.select_neighbours_naive(candidate, &closest_candidates, self.m as usize);
+            let neighbours = self.select_neighbours_heuristic(candidate, &closest_candidates, current_layer, self.m as usize, true, true);
             // println!("found {} neighbourhood to connect to", neighbours.len());
             // bidirectional connection w/ neighbours
             for &neighbour in &neighbours {
@@ -114,14 +124,26 @@ impl HNSWIndex {
                 // println!("neighbour {} has {} connections", neighbour, self.nodes[neighbour].neighbours.len());
             }
 
-            // todo: implement shrinking when grows beyond allowed connections
             for &neighbour in &neighbours {
                 let allowed_connections_for_neighbour = if current_layer != 0 { self.m } else { self.m0 };
-                let neighbourhood = &self.nodes[neighbour].neighbours[&current_layer];
+                let neighbourhood= self.nodes[neighbour].neighbours[&current_layer].clone();
 
                 if neighbourhood.len() > (allowed_connections_for_neighbour as usize) {
                     // if neighbourhood is larger the allowed connections in that layer, shrink.
-                    let shrinked_neighbours = self.select_neighbours_naive(&self.nodes[neighbour].value, &neighbourhood, self.m as usize);
+                    // let shrinked_neighbours = self.select_neighbours_naive(&self.nodes[neighbour].value, &neighbourhood, allowed_connections_for_neighbour as usize);
+                    // don't extend candidates during shrinking
+                    let shrinked_neighbours = self.select_neighbours_heuristic(&self.nodes[neighbour].value, &neighbourhood, current_layer, allowed_connections_for_neighbour as usize, false, true);
+                    
+                    // find the diff in sets neighoburhood - shrinked neighbour hood, unlink connections from those to current neighbours
+                    for &old_neighbour in &neighbourhood {
+                        if !shrinked_neighbours.contains(&old_neighbour) {
+                            // prune the connection
+                            if let Some(old_neighbours_neighbourhood) = self.nodes[old_neighbour].neighbours.get_mut(&current_layer) {
+                                old_neighbours_neighbourhood.retain(|&ele| ele != neighbour);
+                            }
+                        }
+                    }
+
                     // set as new neighbourhood
                     self.nodes[neighbour].neighbours.insert(current_layer, shrinked_neighbours);
                 }
@@ -134,7 +156,7 @@ impl HNSWIndex {
 
             // update entry point with closest candidates
             // println!("updating entry point with {} closest candidates for layer {}", closest_candidates.len(), current_layer);
-            entry_point = closest_candidates;
+            entry_points = closest_candidates;
         }
 
         // calculated_layer can be greater or smaller than the top most layer
@@ -154,7 +176,7 @@ impl HNSWIndex {
         candidates: &Vec<usize>, 
         m: usize) -> Vec<usize> {
         // naive neighbour selection -> select best m from W candidates
-        let mut nearest_neighbours: BinaryHeap<HeapItem> = BinaryHeap::new();
+        let mut nearest_neighbours: BinaryHeap<HeapItem> = BinaryHeap::new(); // min heap: nearest first
         // println!("select_neighbours_naive: finding {} nns from {} closest candidates", m, candidates.len());
         for &candidate in candidates {
             // calculate distance with candidate
@@ -162,8 +184,8 @@ impl HNSWIndex {
             if nearest_neighbours.len() < m {
                 nearest_neighbours.push(HeapItem { node: candidate, dist: proximity });
                 continue;
-            } else if let Some(closest_neighbour) = nearest_neighbours.peek() {
-                if nearest_neighbours.len() < m && proximity < closest_neighbour.dist {
+            } else if let Some(farthest_neighbour) = nearest_neighbours.peek() {
+                if proximity < farthest_neighbour.dist {
                     nearest_neighbours.pop();
                     nearest_neighbours.push(HeapItem { node: candidate, dist: proximity });
                 }
@@ -173,6 +195,88 @@ impl HNSWIndex {
         let results: Vec<usize> = nearest_neighbours.iter().map(|ele| ele.node).collect();
         // println!("select_neighbours_naive: found {} nns from {} closest candidates", results.len(), candidates.len());
         return results;
+    }
+
+    fn select_neighbours_heuristic(
+        &self,
+        query: &[f32],
+        candidates: &Vec<usize>,
+        current_layer: usize,
+        m: usize,
+        extend_candidates: bool,
+        keep_pruned_connections: bool
+    ) -> Vec<usize> {
+
+        let mut neigbour_search_pool: HashSet<usize> = HashSet::new();
+
+        // add all candidates to search pool
+        for &candidate in candidates {
+            neigbour_search_pool.insert(candidate);
+        }
+
+        // extend cadidates to include their neighbours
+        if extend_candidates {
+            for &candidate in candidates {
+                if let Some(neighbourhood) = self.nodes[candidate].neighbours.get(&current_layer) {
+                    for &neighbour in neighbourhood {
+                        neigbour_search_pool.insert(neighbour);
+                    }
+                }
+            }
+        }
+
+        // create a heap based on their dist
+        let mut neigbour_search_list: Vec<HeapItem> = neigbour_search_pool.into_iter()
+            .map(|node| {
+                let proximity = l2(query, &self.nodes[node].value);
+                HeapItem { node, dist: proximity }
+            })
+            .collect();
+
+        neigbour_search_list.sort_by(|a, b| a.dist.total_cmp(&b.dist));
+
+        let mut nearest_neighbours: Vec<usize> = Vec::new();
+        let mut discarded_neighbours: Vec<usize> = Vec::new();
+
+        // for every candidate in the search pool, compare their proximity with already selected candidates
+        for nearest_candidate in neigbour_search_list {
+
+            let mut found_closer = false;
+
+            for &selected_node in &nearest_neighbours {
+                let proximity = l2(
+                    &self.nodes[nearest_candidate.node].value,
+                    &self.nodes[selected_node].value,
+                );
+
+                // discard condition: if the closest candidate is nearer to any "already" selected candidate than the query,
+                // discard that candidate.
+                if proximity < nearest_candidate.dist {
+                    found_closer = true;
+                    break;
+                }
+            }
+
+            if !found_closer {
+                if nearest_neighbours.len() < m {
+                    nearest_neighbours.push(nearest_candidate.node);
+                }
+            } else {
+                discarded_neighbours.push(nearest_candidate.node);
+            }
+        }
+
+        // if still space for top-m, pull the best from discard candidates, earlier sorting ensures that they are sorted
+        if keep_pruned_connections {
+            for node in discarded_neighbours {
+                if nearest_neighbours.len() >= m {
+                    break;
+                }
+                nearest_neighbours.push(node);
+            }
+        }
+
+        return nearest_neighbours;
     }
 
     fn search_layer(
@@ -199,18 +303,21 @@ impl HNSWIndex {
             // println!("search_layer: found closest candidate: {} with proximity {}", closest_candidate.node, closest_candidate.dist);
             
             // if closest_candidate is farther than the farthest result, break
-            if let Some(farthest_k) = nearest_neighbours.peek() {
-                if closest_candidate.dist > farthest_k.dist {
-                    // println!("search_layer: found a candidate {} with proximity {} to query farther than the farthest neighobur {} with proximity to query {}", closest_candidate.node, closest_candidate.dist, farthest_k.node, farthest_k.dist);
-                    break;
+            if nearest_neighbours.len() >= exploration_factor {
+                if let Some(farthest_k) = nearest_neighbours.peek() {
+                    if closest_candidate.dist > farthest_k.dist {
+                        // println!("search_layer: found a candidate {} with proximity {} to query farther than the farthest neighobur {} with proximity to query {}", closest_candidate.node, closest_candidate.dist, farthest_k.node, farthest_k.dist);
+                        break;
+                    }
                 }
             }
+        
 
             // insert closest_candidate into top-k
             if nearest_neighbours.len() < exploration_factor {
                 nearest_neighbours.push(HeapItem { node: closest_candidate.node, dist: closest_candidate.dist });
-            } else if let Some(top_heap) = nearest_neighbours.peek() {
-                if closest_candidate.dist < top_heap.dist {
+            } else if let Some(farthest_neighbour) = nearest_neighbours.peek() {
+                if closest_candidate.dist < farthest_neighbour.dist {
                     nearest_neighbours.pop();
                     nearest_neighbours.push(HeapItem { node: closest_candidate.node, dist: closest_candidate.dist });
                 }
@@ -240,7 +347,11 @@ impl HNSWIndex {
             }
         }
 
-        let results = nearest_neighbours.iter().map(|item| item.node).collect();
+        // sort neighbours as per their proximity to query
+        let mut results: Vec<_> = nearest_neighbours.into_vec();
+        results.sort_by(|a, b| a.dist.total_cmp(&b.dist));
+        let results = results.into_iter().map(|item| item.node).collect();
+
         return results;
     }
 
@@ -252,6 +363,8 @@ impl HNSWIndex {
         // find an entry point till the 1st layer
         let mut entry_points = Vec::new();
         entry_points.push(self.entry_point);
+
+        // find entry point till layer 1
         for current_layer in (1..=self.top_layer).rev(){
             let closest_candidates = self.search_layer(query, &entry_points, current_layer as usize, 1);
             assert!(closest_candidates.len() != 0);
@@ -274,6 +387,8 @@ impl HNSWIndex {
                 }
             }
         }
+
+        // todo: sort results before sending to ensure ordered results
         return results.iter().map(|Reverse(ele)| ele.node).collect();
     }
 
