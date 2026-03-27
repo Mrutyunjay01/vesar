@@ -3,18 +3,20 @@ use vesar::{
     datasets::synthetic_data::{generate_data, generate_query},
 };
 
-const EXPLORATION_FACTOR: usize = 5;
+const EFC: usize = 100;
+const EFQ: usize = 20;
 const N: usize = 100_000;
 const NQ: usize = 100;
-const DIM: usize = 16;
+const DIM: usize = 4;
 const K: usize = 10;
+const M: i32 = 40;
 
 fn build_index() -> HNSWIndex {
     let data = generate_data(N as u64, DIM as u64);
-    let mut db = HNSWIndex::new(40);
+    let mut db = HNSWIndex::new(M);
 
     for point in &data {
-        db.insert(point, EXPLORATION_FACTOR);
+        db.insert(point, EFC);
     }
 
     return db;
@@ -32,7 +34,7 @@ fn hnsw_query() {
     let queries = generate_query(NQ as u64, DIM as u64);
 
     for query in queries {
-        let res = db.search(&query, K, EXPLORATION_FACTOR);
+        let res = db.search(&query, K, EFQ);
         assert!(!res.is_empty() && res.len() != K);
     }
 }
