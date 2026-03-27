@@ -12,23 +12,30 @@ pub struct Node {
     pub neighbours: Vec<NodeId>,
 }
 
-pub struct ANNIndex {
+pub struct NSWIndex {
     pub nodes: Vec<Node>, // adjacency list
 }
 
-impl ANNIndex {
+impl NSWIndex {
     pub fn new() -> Self {
         Self {
             nodes: Vec::new(),
         }
     }
 
-    pub fn insert(&mut self, candidate: &[f32], k: usize, m: usize) {
+    pub fn len(&self) -> usize {
+        return self.nodes.len();
+    }
+
+    pub fn insert(&mut self, candidate: &[f32], m: usize, ef: usize) {
         /* 
         * find the m closest entry vertexes
         * create a neighbourhood consisting of all neighbours of the m vertices
+        * edit: renaming m to ef as exploration factor to be consistent with the hnsw impl
         * find k closest neighbours
         * assign the candidate as a neighour to them and vice-versa
+        * note that neighbourhood may grow beyond k, it's not same as m which is max allowed connections per layer per node
+        * but for consistency, renaming k to m.
         * (approsimate delaunay graph instead of exact voronoi neighbours) 
         */
 
@@ -44,7 +51,7 @@ impl ANNIndex {
             return;
         }
 
-        let local_neighbours = self._multi_search(&candidate, m);
+        let local_neighbours = self._multi_search(&candidate, ef);
         // set of entire neighbourhood derived from local neighbours, no duplicates
         let mut neighbourhood = HashSet::new();
         for &neighbour in &local_neighbours {
@@ -63,7 +70,7 @@ impl ANNIndex {
         for node_id in neighbourhood {
             let proximity = l2(candidate, &self.nodes[node_id].value);
 
-            if max_heap_k.len() < k {
+            if max_heap_k.len() < m {
                 max_heap_k.push(HeapItem { node: (node_id), dist: (proximity) });
             } else if let Some(top) = max_heap_k.peek() { // if heap is full, remove the farthest, insert new closer
                 if proximity < top.dist {
@@ -84,7 +91,8 @@ impl ANNIndex {
         }
     }
 
-    pub fn k_insert(&mut self, candidate: &[f32], k: usize, m: usize) {
+    pub fn k_insert(&mut self, candidate: &[f32], m: usize, ef: usize) {
+        // find m neighbours to connect with the candidate
         let new_node_id = self.nodes.len(); // this shouldn't be incremental counter
         let new_node = Node {
             id: new_node_id,
@@ -98,9 +106,10 @@ impl ANNIndex {
         }
 
         // find k nearest neighbours first
-        let m = m * 2 + 10; // optimal choice as per paper: m = 2 * w + 10
-        let k_neighbours = self.k_multi_search(&candidate, m, k);
-        for neighbour in k_neighbours {
+        let search_ef = ef * 2 + 10; // optimal choice as per paper: search_width = 2 * w + 10, w is width, i.e. ef
+        // more like construction ef here, which is typically higher than the search ef (in search pipeline)
+        let m_neighbours = self.k_multi_search(&candidate, search_ef, m);
+        for neighbour in m_neighbours {
             self.nodes[new_node_id].neighbours.push(neighbour);
             self.nodes[neighbour].neighbours.push(new_node_id);
         }
@@ -156,13 +165,13 @@ impl ANNIndex {
         return closest_neighbour;
     }
 
-    pub fn k_multi_search(&self, query: &[f32], m: usize, k: usize) -> Vec<NodeId> {
+    pub fn k_multi_search(&self, query: &[f32], ef: usize, k: usize) -> Vec<NodeId> {
         
         // results for top-k, candidates - can be just a slice/vec, visitedSet - hash-set, tempRes - again heap
         let mut heap_k: BinaryHeap<HeapItem> = BinaryHeap::new();
         let mut rng = rng();
 
-        for _ in 0..m {
+        for _ in 0..ef {
             // candidates placeholder
             let mut candidates: BinaryHeap<Reverse<HeapItem>> = BinaryHeap::new();
             let mut visited_set: HashSet<NodeId> = HashSet::new();
@@ -248,15 +257,15 @@ impl ANNIndex {
         return neighbours;
     }
 
-    fn _multi_search(&self, query: &[f32], m: usize) -> Vec<NodeId> {
+    fn _multi_search(&self, query: &[f32], ef: usize) -> Vec<NodeId> {
         /*
-        * instead of one entry vertext, start m searches
+        * instead of one entry vertext, start m searches (m as in ef - exploration factor)
         * then take the closest element to the query
         */
         let mut rng = rng();
         let mut results = Vec::new();
         
-        for _ in 0..m {
+        for _ in 0..ef {
             let entry_vertex = rng.random_range(0..self.nodes.len());
             let local_node_id = self.greedy_search(query, entry_vertex);
             // if local_minima not in the set, add to the results set

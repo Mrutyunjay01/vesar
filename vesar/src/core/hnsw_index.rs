@@ -40,10 +40,6 @@ impl HNSWIndex {
         return self.nodes.len();
     }
 
-    fn is_empty(&self) -> bool {
-        self.nodes.len() == 0
-    }
-
     fn sample_layer(&self, ml: f64) -> usize {
         let mut rng = rand::rng();
         // floor(- ln(UniformSample(0, 1)) * ml)
@@ -62,12 +58,12 @@ impl HNSWIndex {
             neighbours: HashMap::new()
         };
 
+        // insert node
+        self.nodes.push(Node { id: incoming_node.id, value: incoming_node.value.to_vec(), neighbours: incoming_node.neighbours });
+
         // if the db is empty
-        if self.is_empty() {
+        if self.len() == 1 {
             // println!("no node in db, adding first node ...");
-            // insert node
-            self.nodes.push(Node { id: incoming_node.id, value: incoming_node.value.to_vec(), neighbours: incoming_node.neighbours });
-        
             // update metadata
             self.entry_point = incoming_node.id;
             self.top_layer = 0;
@@ -75,8 +71,7 @@ impl HNSWIndex {
             return
         }
 
-        // insert node
-        self.nodes.push(Node { id: incoming_node.id, value: incoming_node.value.to_vec(), neighbours: incoming_node.neighbours });
+        // println!("inserting {}th neighbour with id {}", self.nodes.len(), incoming_node.id);
         
         // generate layer for the incoming node
         let calculated_layer = self.sample_layer(self.ml);
@@ -97,10 +92,11 @@ impl HNSWIndex {
 
         // now that we have an entry point to go into the calculated_layer,
         // find closest neighbours -> connect -> shrink if grown beyond allowed
-        // println!("descending from layers using found {} entry points", entry_point.len());
+        // println!("descending from layers using found {} entry points", entry_points.len());
         let layer_cap = cmp::min(calculated_layer, self.top_layer as usize);
-        for current_layer in (0..layer_cap).rev() {
-            // println!("finding closest candidate in layer {} using {} entry points with ef: {}", current_layer, entry_point.len(), exploration_factor);
+        for current_layer in (0..=layer_cap).rev() {
+            let allowed_connections_for_neighbour = if current_layer != 0 { self.m } else { self.m0 };
+            // println!("finding closest candidate in layer {} using {} entry points with ef: {}", current_layer, entry_points.len(), exploration_factor);
             let closest_candidates = self.search_layer(candidate, &entry_points, current_layer, exploration_factor);
             assert!(
                 closest_candidates.len() <= exploration_factor,
@@ -111,40 +107,49 @@ impl HNSWIndex {
             // println!("found {} closest neighoburs in layer: {}", closest_candidates.len(), current_layer);
             // find m closest neighbours
             // let neighbours = self.select_neighbours_naive(candidate, &closest_candidates, self.m as usize);
-            let neighbours = self.select_neighbours_heuristic(candidate, &closest_candidates, current_layer, self.m as usize, true, true);
+            let neighbours = self.select_neighbours_heuristic(candidate, &closest_candidates, current_layer, allowed_connections_for_neighbour as usize, true, true);
             // println!("found {} neighbourhood to connect to", neighbours.len());
             // bidirectional connection w/ neighbours
             for &neighbour in &neighbours {
                 // connect candidate
                 // println!("connecting {} with neighbour {}", incoming_node.id, neighbour);
                 self.nodes[incoming_node.id].neighbours.entry(current_layer).or_insert_with(Vec::new).push(neighbour);
-                // println!("connected neihbours to {}: {}", incoming_node.id, self.nodes[incoming_node.id].neighbours.len());
+                // println!("connected neihbours to {} in layer {}: {}", incoming_node.id, current_layer, self.nodes[incoming_node.id].neighbours[&current_layer].len());
                 // connect neighbours
                 // println!("connecting neighobur {} with {}", neighbour, incoming_node.id);
                 self.nodes[neighbour].neighbours.entry(current_layer).or_insert_with(Vec::new).push(incoming_node.id);
-                // println!("neighbour {} has {} connections", neighbour, self.nodes[neighbour].neighbours.len());
+                // println!("neighbour {} has {} connections in layer {}", neighbour, self.nodes[neighbour].neighbours[&current_layer].len(), current_layer);
             }
 
             for &neighbour in &neighbours {
-                let allowed_connections_for_neighbour = if current_layer != 0 { self.m } else { self.m0 };
+                // println!("considering pruning for neighbour {}", neighbour);
                 let neighbourhood= self.nodes[neighbour].neighbours[&current_layer].clone();
+                // println!("found neighoburhood {} for neighbour {}", neighbourhood.len(), neighbour);
 
                 if neighbourhood.len() > (allowed_connections_for_neighbour as usize) {
+                    // println!("shrinking neighbourhoop as it's higher than max allowed connections {}", allowed_connections_for_neighbour);
                     // if neighbourhood is larger the allowed connections in that layer, shrink.
                     // let shrinked_neighbours = self.select_neighbours_naive(&self.nodes[neighbour].value, &neighbourhood, allowed_connections_for_neighbour as usize);
                     // don't extend candidates during shrinking
                     let shrinked_neighbours = self.select_neighbours_heuristic(&self.nodes[neighbour].value, &neighbourhood, current_layer, allowed_connections_for_neighbour as usize, false, true);
+                    // println!("shrinked neighbours found {}", shrinked_neighbours.len());
                     
                     // find the diff in sets neighoburhood - shrinked neighbour hood, unlink connections from those to current neighbours
                     for &old_neighbour in &neighbourhood {
                         if !shrinked_neighbours.contains(&old_neighbour) {
                             // prune the connection
+                            // println!("removing old neighbour {} connection from neighbour {}", old_neighbour, neighbour);
                             if let Some(old_neighbours_neighbourhood) = self.nodes[old_neighbour].neighbours.get_mut(&current_layer) {
+                                // println!("before removing {}", old_neighbours_neighbourhood.len());
                                 old_neighbours_neighbourhood.retain(|&ele| ele != neighbour);
+                                // println!("after removing {}", old_neighbours_neighbourhood.len());
                             }
-
+                            
+                            // println!("removing neighbour {} connection from old neighbour {}", neighbour, old_neighbour);
                             if let Some(neighbours_neighbourhood) = self.nodes[neighbour].neighbours.get_mut(&current_layer) {
-                                neighbours_neighbourhood.retain(|&ele| ele != neighbour);
+                                // println!("before removing {}", neighbours_neighbourhood.len());
+                                neighbours_neighbourhood.retain(|&ele| ele != old_neighbour);
+                                // println!("after removing {}", neighbours_neighbourhood.len()); 
                             }
                         }
                     }
@@ -172,7 +177,7 @@ impl HNSWIndex {
             self.entry_point = incoming_node.id
         }
 
-        // println!(">>>> total node {}, top layer {}, entry point {}", self.nodes.len(), self.top_layer, self.entry_point);
+        // println!(">>>>>>>>>>>>>>>>>>> total node {}, top layer {}, entry point {}", self.nodes.len(), self.top_layer, self.entry_point);
     }
 
     fn select_neighbours_naive(
@@ -316,7 +321,6 @@ impl HNSWIndex {
                     }
                 }
             }
-        
 
             // insert closest_candidate into top-k
             if nearest_neighbours.len() < exploration_factor {
