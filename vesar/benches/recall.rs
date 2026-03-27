@@ -155,8 +155,8 @@ fn recall_bench_knn() {
 fn recall_bench_hnsw() {
     let n_set: Vec<u64> = parse_env_list("N", "1000000");
     let dim_set: Vec<u64> = parse_env_list("DIM", "16");
-    let m_set: Vec<u64> = parse_env_list("GD", "10");
-    let ef_set: Vec<u64> = parse_env_list("M", "5");
+    let m_set: Vec<u64> = parse_env_list("GD", "32");
+    let ef_set: Vec<u64> = parse_env_list("M", "16");
     let k_set: Vec<u64> = parse_env_list("K", "10");
     let iters = std::env::var("ITERS").unwrap_or(String::from("10")).parse::<usize>().unwrap();
 
@@ -168,7 +168,7 @@ fn recall_bench_hnsw() {
             for &m in &m_set {
                 for &ef in &ef_set {
                     let mut db = HNSWIndex::new(m as i32);
-                    for point in &points { db.insert(point, (ef*ef) as usize); }
+                    for point in &points { db.insert(point, (ef*4) as usize); }
 
                     for &k in &k_set {
                         let mut gt_top_k = Vec::with_capacity(queries.len());
@@ -178,7 +178,7 @@ fn recall_bench_hnsw() {
 
                         // warm up
                         for query in queries.iter().take(100) {
-                            black_box(db.search(query, k as usize, ef as usize));
+                            black_box(db.search(query, k as usize, (ef*2) as usize));
                         }
 
                         let mut total_duration_knn = Duration::ZERO;
@@ -188,7 +188,8 @@ fn recall_bench_hnsw() {
                             let mut iter_recall_knn = 0.0;
                             let start_knn = Instant::now();
                             for (query_idx, query) in queries.iter().enumerate() {
-                                let results = black_box(db.search(query, k as usize, ef as usize));
+                                let results = black_box(db.search(query, k as usize, (ef * 2) as usize));
+                                assert!(results.len() == gt_top_k[query_idx].len(), "mismatching lengths between results and ground truth");
                                 iter_recall_knn += calculate_recall_k(&gt_top_k[query_idx], &results);
                             }
                             total_duration_knn += start_knn.elapsed();
@@ -214,7 +215,7 @@ fn recall_bench_hnsw() {
 }
 
 fn main() {
-    // recall_bench_ann();
-    // recall_bench_knn();
+    recall_bench_ann();
+    recall_bench_knn();
     recall_bench_hnsw();
 }

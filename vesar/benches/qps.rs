@@ -4,12 +4,12 @@ use vesar::core::ann_index::ANNIndex;
 use vesar::core::hnsw_index::HNSWIndex;
 use vesar::datasets::synthetic_data::{generate_data, generate_query};
 
-fn parse_env_list<T>(var_name: &str) -> Vec<T> 
+fn parse_env_list<T>(var_name: &str, default_val: &str) -> Vec<T> 
 where 
     T: std::str::FromStr,
 {
     std::env::var(var_name)
-        .unwrap_or_default()
+        .unwrap_or(String::from(default_val))
         .split(',')
         .map(|s| s.replace('_', "").trim().parse::<T>())
         .flatten() // Silently skips errors/empty strings
@@ -19,10 +19,10 @@ where
 fn bench_query_ann(c: &mut Criterion) {
     let mut group = c.benchmark_group("query_bench_ann");
 
-    let n_set: Vec<u64> = parse_env_list("N");
-    let dim_set: Vec<u64> = parse_env_list("DIM");
-    let gd_set: Vec<usize> = parse_env_list("GD");
-    let m_set: Vec<usize> = parse_env_list("M");
+    let n_set: Vec<u64> = parse_env_list("N", "1_000_000");
+    let dim_set: Vec<u64> = parse_env_list("DIM", "16");
+    let gd_set: Vec<usize> = parse_env_list("GD", "10");
+    let m_set: Vec<usize> = parse_env_list("M", "5");
 
     for &n in &n_set {
         for &dim in &dim_set {
@@ -54,10 +54,10 @@ fn bench_query_ann(c: &mut Criterion) {
 fn bench_query_knn(c: &mut Criterion) {
     let mut group = c.benchmark_group("query_bench_knn");
 
-    let n_set: Vec<u64> = parse_env_list("N");
-    let dim_set: Vec<u64> = parse_env_list("DIM");
-    let gd_set: Vec<usize> = parse_env_list("GD");
-    let m_set: Vec<usize> = parse_env_list("M");
+    let n_set: Vec<u64> = parse_env_list("N", "1_000_000");
+    let dim_set: Vec<u64> = parse_env_list("DIM", "16");
+    let gd_set: Vec<usize> = parse_env_list("GD", "10");
+    let m_set: Vec<usize> = parse_env_list("M", "5");
 
     for &n in &n_set {
         for &dim in &dim_set {
@@ -89,10 +89,10 @@ fn bench_query_knn(c: &mut Criterion) {
 fn bench_query_hnsw(c: &mut Criterion) {
     let mut group = c.benchmark_group("query_bench_hnsw");
 
-    let n_set: Vec<u64> = parse_env_list("N");
-    let dim_set: Vec<u64> = parse_env_list("DIM");
-    let m_set: Vec<usize> = parse_env_list("GD");
-    let ef_set: Vec<usize> = parse_env_list("M");
+    let n_set: Vec<u64> = parse_env_list("N", "1_000_000");
+    let dim_set: Vec<u64> = parse_env_list("DIM", "16");
+    let m_set: Vec<i32> = parse_env_list("GD", "32"); // number of connections i.e. m
+    let ef_set: Vec<usize> = parse_env_list("M", "16"); // substitute for exploration factor
 
     for &n in &n_set {
         for &dim in &dim_set {
@@ -104,14 +104,14 @@ fn bench_query_hnsw(c: &mut Criterion) {
                 for &ef in &ef_set {
                     let mut db = HNSWIndex::new(m as i32);
                     for point in &points {
-                        db.insert(point, ef * ef);
+                        db.insert(point, ef * 4);
                     }
 
                     group.bench_function(format!("query_n_{}_dim_{}_gd_{}_m_{}", n, dim, m, ef), 
                     |b| {
                         b.iter(|| {
                         for query in &quries {
-                            black_box(db.search(query, 10, ef));
+                            black_box(db.search(query, 10, ef * 2));
                         }});
                     });
             }
@@ -121,6 +121,5 @@ fn bench_query_hnsw(c: &mut Criterion) {
     group.finish();
 }
 
-// criterion_group!(benches, bench_query_ann, bench_query_knn);
-criterion_group!(benches, bench_query_hnsw);
+criterion_group!(benches, bench_query_ann, bench_query_knn, bench_query_hnsw);
 criterion_main!(benches);

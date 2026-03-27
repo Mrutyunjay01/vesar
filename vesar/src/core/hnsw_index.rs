@@ -86,7 +86,7 @@ impl HNSWIndex {
         entry_points.push(self.entry_point);
 
         // otherwise, descend from L to calculated_layer entry point
-        for current_layer in (calculated_layer..=self.top_layer as usize).rev() {
+        for current_layer in (calculated_layer+1..=self.top_layer as usize).rev() {
             // println!("finding closest in layer: {}", current_layer);
             // find single entry point per layer, which is the closest candidate to the incoming node
             let closest_in_current_layer = self.search_layer(&incoming_node.value, &entry_points, current_layer, 1);
@@ -98,7 +98,8 @@ impl HNSWIndex {
         // now that we have an entry point to go into the calculated_layer,
         // find closest neighbours -> connect -> shrink if grown beyond allowed
         // println!("descending from layers using found {} entry points", entry_point.len());
-        for current_layer in (0..cmp::min(calculated_layer, self.top_layer as usize)).rev() {
+        let layer_cap = cmp::min(calculated_layer, self.top_layer as usize);
+        for current_layer in (0..layer_cap).rev() {
             // println!("finding closest candidate in layer {} using {} entry points with ef: {}", current_layer, entry_point.len(), exploration_factor);
             let closest_candidates = self.search_layer(candidate, &entry_points, current_layer, exploration_factor);
             assert!(
@@ -140,6 +141,10 @@ impl HNSWIndex {
                             // prune the connection
                             if let Some(old_neighbours_neighbourhood) = self.nodes[old_neighbour].neighbours.get_mut(&current_layer) {
                                 old_neighbours_neighbourhood.retain(|&ele| ele != neighbour);
+                            }
+
+                            if let Some(neighbours_neighbourhood) = self.nodes[neighbour].neighbours.get_mut(&current_layer) {
+                                neighbours_neighbourhood.retain(|&ele| ele != neighbour);
                             }
                         }
                     }
