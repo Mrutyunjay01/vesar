@@ -84,22 +84,24 @@ fn bench_insert_hnsw(c: &mut Criterion) {
     let mut group = c.benchmark_group("insert_bench_hnsw");
     
     let n_set: Vec<u64> = parse_env_list("N", "1_000_000");
-    let dim_set: Vec<u64> = parse_env_list("DIM", "16");
-    let m_set: Vec<i32> = parse_env_list("M", "16"); // number of connections i.e. m
+    let dim_set: Vec<usize> = parse_env_list("DIM", "16");
+    let m_set: Vec<usize> = parse_env_list("M", "16"); // number of connections i.e. m
     let efc_set: Vec<usize> = parse_env_list("EFC", "16"); // substitute for exploration factor
 
     for &n in &n_set {
         for &dim in &dim_set {
-            let points = generate_data(n, dim);
+            let points = generate_data(n, dim as u64);
             group.throughput(criterion::Throughput::Elements(points.len() as u64));
             for &m in &m_set {
+                let m_insert = cmp::max(m, 2 * dim);
                 for &efc in &efc_set {
-                    group.bench_function(format!("insert_n_{}_dim_{}_m_{}_efc_{}", n, dim, m, efc),
+                    let efc_insert = cmp::max(efc, 5 * dim);
+                    group.bench_function(format!("insert_n_{}_dim_{}_m_{}_efc_{}", n, dim, m_insert, efc_insert),
                     |b| {
-                        b.iter_batched(|| HNSWIndex::new(m),
+                        b.iter_batched(|| HNSWIndex::new(m_insert as i32),
                     |mut db| {
                         for point in &points {
-                            db.insert(black_box(point), efc);
+                            db.insert(black_box(point), efc_insert);
                         }}, 
                         BatchSize::LargeInput);
                     });

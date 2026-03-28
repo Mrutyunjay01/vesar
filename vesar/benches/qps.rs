@@ -1,3 +1,4 @@
+use std::cmp;
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 use vesar::core::{hnsw_index::HNSWIndex, nsw_index::NSWIndex};
@@ -112,24 +113,27 @@ fn bench_query_hnsw(c: &mut Criterion) {
 
             group.throughput(criterion::Throughput::Elements(quries.len() as u64));
             for &m in &m_set {
+                let m_insert = cmp::max(m, 2 * dim as i32);
                 for &efc in &efc_set {
-                    let mut db = HNSWIndex::new(m as i32);
+                    let efc_insert = cmp::max(efc, 5 * dim as usize);
+                    let mut db = HNSWIndex::new(m_insert);
                     for point in &points {
-                        db.insert(point, efc);
+                        db.insert(point, efc_insert);
                     }
 
                     for &efq in &efq_set {
+                        let efq_query = cmp::max(efq, 2 * dim as usize);
                         for &k in &k_set {
                             // warm up
                             for query in quries.iter().take(50) {
-                                db.search(query, k, efq);
+                                db.search(query, k, efq_query);
                             }
 
-                            group.bench_function(format!("query_n_{}_dim_{}_m_{}_efc_{}_efq_{}_k_{}", n, dim, m, efc, efq, k), 
+                            group.bench_function(format!("query_n_{}_dim_{}_m_{}_efc_{}_efq_{}_k_{}", n, dim, m_insert, efc_insert, efq_query, k),
                             |b| {
                                 b.iter(|| {
                                 for query in &quries {
-                                    black_box(db.search(query, k, efq));
+                                    black_box(db.search(query, k, efq_query));
                                 }});
                             });
                         }

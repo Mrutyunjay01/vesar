@@ -89,7 +89,7 @@ fn recall_bench_ann() {
                             let avg_time_ms_insert = (total_duration_insert.as_secs_f64() * 1000.0) / points.len() as f64;
 
                             println!(
-                                "{:<37} | {:<15} {:<6.4} | {:<11} {:<6.0} | {:<22} {:<6.4}ms | {:<22} {:<6.4}ms",
+                                "{:<40} | {:<15} {:<6.4} | {:<11} {:<6.0} | {:<22} {:<6.4}ms | {:<22} {:<6.4}ms",
                                 bench_name,
                                 "RECALL (ANN)", avg_recall_ann,
                                 "QPS (ANN)", qps_ann,
@@ -162,7 +162,7 @@ fn recall_bench_knn() {
                             let avg_time_ms_insert = (total_duration_insert.as_secs_f64() * 1000.0) / points.len() as f64;
 
                             println!(
-                                "{:<37} | {:<15} {:<6.4} | {:<11} {:<6.0} | {:<22} {:<6.4}ms | {:<22} {:<6.4}ms",
+                                "{:<40} | {:<15} {:<6.4} | {:<11} {:<6.0} | {:<22} {:<6.4}ms | {:<22} {:<6.4}ms",
                                 bench_name,
                                 "RECALL (KNN)", avg_recall_knn,
                                 "QPS (KNN)", qps_knn,
@@ -193,12 +193,14 @@ fn recall_bench_hnsw() {
             let queries = generate_query((n as f64).sqrt() as u64, dim);
 
             for &m in &m_set { // allowed connections per node
+                let m_insert = cmp::max(m, 2 * dim as u64);
                 for &efc in &efc_set { // exploration factor per layer
-                    let mut db = HNSWIndex::new(m as i32);
+                    let mut db = HNSWIndex::new(m_insert as i32);
                     let mut total_duration_insert = Duration::ZERO;
+                    let efc_insert = cmp::max(efc, 5 * dim as usize);
                     let start_insert = Instant::now();
                     for point in &points { 
-                        db.insert(point, efc); 
+                        db.insert(point, efc_insert); 
                     }
                     total_duration_insert += start_insert.elapsed();
 
@@ -209,9 +211,10 @@ fn recall_bench_hnsw() {
                         }
 
                         for &efq in &efq_set {
+                            let efq_query = cmp::max(efq, 2 * dim as usize);
                             // warm up
                             for query in queries.iter().take(100) {
-                                black_box(db.search(query, k as usize, efq));
+                                black_box(db.search(query, k as usize, efq_query));
                             }
 
                             let mut total_duration_knn = Duration::ZERO;
@@ -221,7 +224,7 @@ fn recall_bench_hnsw() {
                                 let mut iter_recall_knn = 0.0;
                                 let start_knn = Instant::now();
                                 let all_results: Vec<_> = queries.iter().map(
-                                    |query| black_box(db.search(query,  k as usize, efq))).collect();
+                                    |query| black_box(db.search(query,  k as usize, efq_query))).collect();
                                 total_duration_knn += start_knn.elapsed();
                                 
                                 for (query_idx, res) in all_results.iter().enumerate() {
@@ -231,7 +234,7 @@ fn recall_bench_hnsw() {
                                 total_recall_knn += iter_recall_knn as f64 / queries.len() as f64;
                             }
 
-                            let bench_name = format!("n_{}_dim_{}_m_{}_efc_{}_efq_{}_k_{}", n, dim, m, efc, efq, k);
+                            let bench_name = format!("n_{}_dim_{}_m_{}_efc_{}_efq_{}_k_{}", n, dim, m_insert, efc_insert, efq_query, k);
                             let avg_recall_knn = total_recall_knn / iters as f64;
                             
                             let total_queries = (queries.len() * iters) as f64;
@@ -240,7 +243,7 @@ fn recall_bench_hnsw() {
                             let avg_time_ms_insert = (total_duration_insert.as_secs_f64() * 1000.0) / points.len() as f64;
 
                             println!(
-                                "{:<37} | {:<15} {:<6.4} | {:<11} {:<6.0} | {:<22} {:<6.4}ms | {:<22} {:<6.4}ms",
+                                "{:<40} | {:<15} {:<6.4} | {:<11} {:<6.0} | {:<22} {:<6.4}ms | {:<22} {:<6.4}ms",
                                 bench_name,
                                 "RECALL (HNSW)", avg_recall_knn,
                                 "QPS (HNSW)", qps_knn,
