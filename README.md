@@ -38,7 +38,7 @@ To run benchmarks on insertions, queries per second (qps) and recall with `1_00_
 N=1_00_000 DIM=16 cargo bench --bench insert --bench qps --bench recall -- --sample-size 10
 ```
 
-You can explore more about usage of environment variables for benchmarks in the respective files. To keep things consistent, here's an abstract nomencleture:
+You can explore more about usage of environment variables for benchmarks in the respective files. Synthetic data and queries are generated from fixed seeds, and HNSW layer sampling is seeded too, so HNSW numbers are reproducible run to run (NSW still picks random entry points). To keep things consistent, here's an abstract nomencleture:
 
 - N     : Number of data points in the dataset
 - DIM   : Dimension of each datapoint in the dataset

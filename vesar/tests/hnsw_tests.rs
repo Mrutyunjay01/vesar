@@ -35,6 +35,6 @@ fn hnsw_query() {
 
     for query in queries {
         let res = db.search(&query, K, EFQ);
-        assert!(!res.is_empty() && res.len() != K);
+        assert!(!res.is_empty() && res.len() == K);
     }
 }

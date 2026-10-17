@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::{cmp::Reverse, collections::HashSet};
 use std::{cmp, collections::BinaryHeap};
-use rand::{distr::{Distribution, Uniform}};
+use rand::{distr::{Distribution, Uniform}, rngs::StdRng, SeedableRng};
 use crate::{container::heap::{HeapItem, NodeId}, metrics::l2::l2};
 
 pub struct Node {
@@ -16,8 +16,12 @@ pub struct HNSWIndex {
     m0: i32, // maximum number of connections per node at layer 0
     ml: f64, // layer normalization factor
     entry_point: NodeId, // entry point
-    nodes: Vec<Node>
+    nodes: Vec<Node>,
+    rng: StdRng, // seeded layer sampling, so the same inserts always build the same graph
 }
+
+/// Seed used by `HNSWIndex::new`; use `HNSWIndex::with_seed` for a different graph.
+pub const DEFAULT_SEED: u64 = 0x5EED;
 
 fn compute_ml(m: i32) -> f64 {
     return 1.0 / (m as f64).ln();
@@ -26,13 +30,18 @@ fn compute_ml(m: i32) -> f64 {
 impl HNSWIndex {
     // ctor
     pub fn new(m: i32) -> Self {
+        return Self::with_seed(m, DEFAULT_SEED);
+    }
+
+    pub fn with_seed(m: i32, seed: u64) -> Self {
         return Self {
             top_layer: 0,
             m: m,
             m0: 2 * m,
             ml: compute_ml(m),
             entry_point: 0,
-            nodes: Vec::new()
+            nodes: Vec::new(),
+            rng: StdRng::seed_from_u64(seed),
         };
     }
 
@@ -40,10 +49,11 @@ impl HNSWIndex {
         return self.nodes.len();
     }
 
-    fn sample_layer(&self, ml: f64) -> usize {
-        let mut rng = rand::rng();
-        // floor(- ln(UniformSample(0, 1)) * ml)
-        let u: f64 = Uniform::new(0.0, 1.0).unwrap().sample(&mut rng); // sample from Uniform Distribution
+    fn sample_layer(&mut self, ml: f64) -> usize {
+        // floor(- ln(UniformSample(0, 1]) * ml)
+        // the sample is taken from [0, 1) and flipped to (0, 1]: u = 0 would give ln(0) = -inf and an
+        // "infinite" layer, which saturates to usize::MAX.
+        let u: f64 = 1.0 - Uniform::new(0.0, 1.0).unwrap().sample(&mut self.rng);
         return (- u.ln() * ml) as usize;
     }
 
@@ -369,6 +379,9 @@ impl HNSWIndex {
         query: &[f32], 
         k: usize, 
         exploration_factor: usize) -> Vec<NodeId> {
+        // layer 0 must keep at least k candidates, otherwise fewer than k results come back
+        let exploration_factor = cmp::max(exploration_factor, k);
+
         // find an entry point till the 1st layer
         let mut entry_points = Vec::new();
         entry_points.push(self.entry_point);
@@ -397,8 +410,8 @@ impl HNSWIndex {
             }
         }
 
-        // todo: sort results before sending to ensure ordered results
-        return results.iter().map(|Reverse(ele)| ele.node).collect();
+        // nearest first: sorting Reverse items ascending gives descending distance, so reverse it
+        return results.into_sorted_vec().into_iter().rev().map(|Reverse(ele)| ele.node).collect();
     }
 
     pub fn bruteforce_top_k(&self, query: &[f32], k: usize) -> Vec<NodeId> {
@@ -417,8 +430,9 @@ impl HNSWIndex {
             }
         }
         
+        // nearest first
         let neighbours: Vec<NodeId> =
-            max_heap_k.iter().map(|item| item.node).collect();
+            max_heap_k.into_sorted_vec().into_iter().map(|item| item.node).collect();
 
         return neighbours;
     }

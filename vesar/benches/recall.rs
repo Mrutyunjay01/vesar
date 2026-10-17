@@ -17,17 +17,14 @@ where
         .collect()
 }
 
+/// recall@k = |unique results in ground truth| / k, where k = gt.len().
+/// Dividing by gt.len() (not results.len()) means returning fewer, or duplicate, ids lowers recall
+/// instead of inflating it.
 fn calculate_recall_k(gt: &[usize], results: &[usize]) -> f64 {
     let gt_set: HashSet<_> = gt.iter().collect();
+    let found: HashSet<_> = results.iter().filter(|r| gt_set.contains(r)).collect();
 
-    let mut correct_match = 0;
-    for result in results {
-        if gt_set.contains(result) {
-            correct_match += 1;
-        }
-    }
-
-    return correct_match as f64 / results.len() as f64;
+    return found.len() as f64 / gt.len() as f64;
 }
 
 fn recall_bench_ann() {
@@ -36,7 +33,8 @@ fn recall_bench_ann() {
     let m_set: Vec<usize> = parse_env_list("M", "10");
     let efc_set: Vec<usize> = parse_env_list("EFC", "5");
     let efq_set: Vec<usize> = parse_env_list("EFQ", "5");
-    let k_set: Vec<u64> = parse_env_list("K", "10");
+    // multi_search returns a single id, so it is scored against the true nearest neighbour (k = 1)
+    let k_set: Vec<u64> = vec![1];
     let iters = std::env::var("ITERS").unwrap_or(String::from("10")).parse::<usize>().unwrap();
 
     for &n in &n_set {
@@ -122,16 +120,15 @@ fn recall_bench_knn() {
                 let m_insert = cmp::max(m, 3 * dim + 1);
                 for &efc in &efc_set {
                     let mut db = NSWIndex::new();
+                    let start_insert = Instant::now();
                     for point in &points { db.k_insert(point, m_insert, efc); }
+                    let total_duration_insert = start_insert.elapsed();
 
                     for &k in &k_set {
                         let mut gt_top_k = Vec::with_capacity(queries.len());
-                        let mut total_duration_insert = Duration::ZERO;
-                        let start_insert = Instant::now();
                         for query in &queries {
                             gt_top_k.push(db.bruteforce_top_k(query, k as usize));
                         }
-                        total_duration_insert += start_insert.elapsed();
 
                         for &efq in &efq_set {
                             // warm up
